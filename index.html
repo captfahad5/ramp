@@ -109,14 +109,14 @@ h1{
     gap:15px;
 }
 
-input, button{
+input, button, select{
     padding:12px;
     border:none;
     border-radius:12px;
     font-size:16px;
 }
 
-input{
+input, select{
     background:#1e293b;
     color:white;
 }
@@ -342,6 +342,11 @@ button:hover{
     <div class="form-grid">
         <input type="password" id="aviationKey" value="0b8a02b9ab1447fdcd833afc576ead72" placeholder="Aviationstack API Key">
         <input type="text" id="airportCode" value="KHI" placeholder="Arrival Airport IATA (KHI / LHE / ISB)">
+        <select id="scheduleType">
+            <option value="arrival">Arrival</option>
+            <option value="departure">Departure</option>
+            <option value="both">Both</option>
+        </select>
         <input type="text" id="apiAttendant" value="Ramp Team" placeholder="Default Ramp Attendant">
         <button class="refresh-btn" onclick="refreshPIASchedule()">Refresh PIA Schedule</button>
     </div>
@@ -510,9 +515,11 @@ function setApiStatus(message){
 async function refreshPIASchedule(){
     const keyInput = document.getElementById('aviationKey');
     const airportInput = document.getElementById('airportCode');
+    const scheduleTypeInput = document.getElementById('scheduleType');
     const attendantInput = document.getElementById('apiAttendant');
     const key = keyInput.value.trim();
     const airportCode = airportInput.value.trim().toUpperCase();
+    const scheduleType = scheduleTypeInput.value;
     const attendant = attendantInput.value.trim() || 'Ramp Team';
 
     if(!key || !airportCode){
@@ -522,66 +529,78 @@ async function refreshPIASchedule(){
 
     localStorage.setItem('aviationstackKey', key);
     localStorage.setItem('piaAirportCode', airportCode);
+    localStorage.setItem('piaScheduleType', scheduleType);
     localStorage.setItem('piaApiAttendant', attendant);
-    setApiStatus('Refreshing PIA arrivals...');
+    setApiStatus('Refreshing PIA schedule...');
 
     const today = new Date().toISOString().slice(0,10);
-    const url = `https://api.aviationstack.com/v1/timetable?access_key=${encodeURIComponent(key)}&iataCode=${encodeURIComponent(airportCode)}&type=arrival&airline_iata=PK&date=${today}`;
+    const fetchTypes = scheduleType === 'both' ? ['arrival','departure'] : [scheduleType];
 
     try{
-        const response = await fetch(url);
+        const allImported = [];
 
-        if(!response.ok){
-            throw new Error(`API request failed (${response.status})`);
-        }
+        for(const type of fetchTypes){
+            const url = `https://api.aviationstack.com/v1/timetable?access_key=${encodeURIComponent(key)}&iataCode=${encodeURIComponent(airportCode)}&type=${type}&airline_iata=PK&date=${today}`;
+            const response = await fetch(url);
 
-        const data = await response.json();
-
-        if(data.error){
-            throw new Error(data.error.message || data.error.info || 'Aviationstack API error');
-        }
-
-        const results = Array.isArray(data.results) ? data.results : data.data;
-
-        if(!Array.isArray(results)){
-            throw new Error('Unexpected API response');
-        }
-
-        const now = new Date();
-        const imported = results.map((flight, index)=>{
-            const arrival = flight.arrival || {};
-            const aircraft = flight.aircraft || {};
-            const flightInfo = flight.flight || {};
-            const arrivalValue = arrival.estimatedTime || arrival.estimated || arrival.scheduledTime || arrival.scheduled || arrival.actualTime || arrival.actual;
-            const arrivalTime = getTimeFromApiValue(arrivalValue);
-            const aircraftCode = aircraft.registration || aircraft.regNumber || flightInfo.iataNumber || flightInfo.iata || flightInfo.icaoNumber || flightInfo.icao || `PIA-${index + 1}`;
-
-            if(!arrivalTime){
-                return null;
+            if(!response.ok){
+                throw new Error(`API request failed (${response.status})`);
             }
 
-            const remaining = getRemainingSeconds(arrivalTime);
+            const data = await response.json();
 
-            if(remaining < 0 || remaining > 28800){
-                return null;
+            if(data.error){
+                throw new Error(data.error.message || data.error.info || 'Aviationstack API error');
             }
 
-            return {
-                id: Date.now() + index,
-                aircraft: aircraftCode,
-                attendant: attendant,
-                arrivalTime: arrivalTime,
-                alarmPlayed: remaining <= 1500,
-                arrivalAnnounced: false,
-                source: 'aviationstack'
-            };
-        }).filter(Boolean);
+            const results = Array.isArray(data.results) ? data.results : data.data;
+
+            if(!Array.isArray(results)){
+                throw new Error('Unexpected API response');
+            }
+
+            const imported = results.map((flight, index)=>{
+                const arrival = flight.arrival || {};
+                const departure = flight.departure || {};
+                const aircraft = flight.aircraft || {};
+                const flightInfo = flight.flight || {};
+                const timeSource = type === 'departure' ? departure : arrival;
+                const timeValue = timeSource.estimatedTime || timeSource.estimated || timeSource.scheduledTime || timeSource.scheduled || timeSource.actualTime || timeSource.actual;
+                const scheduleTime = getTimeFromApiValue(timeValue);
+                const flightNumber = flightInfo.iataNumber || flightInfo.iata || flightInfo.icaoNumber || flightInfo.icao || `PIA-${index + 1}`;
+                const aircraftCode = aircraft.registration || aircraft.regNumber || flightNumber;
+                const displayCode = type === 'departure' ? `DEP ${aircraftCode}` : aircraftCode;
+
+                if(!scheduleTime){
+                    return null;
+                }
+
+                const remaining = getRemainingSeconds(scheduleTime);
+
+                if(remaining < 0 || remaining > 28800){
+                    return null;
+                }
+
+                return {
+                    id: Date.now() + allImported.length + index,
+                    aircraft: displayCode,
+                    attendant: attendant,
+                    arrivalTime: scheduleTime,
+                    alarmPlayed: remaining <= 1500,
+                    arrivalAnnounced: false,
+                    scheduleType: type,
+                    source: 'aviationstack'
+                };
+            }).filter(Boolean);
+
+            allImported.push(...imported);
+        }
 
         aircrafts = aircrafts.filter(item => item.source !== 'aviationstack');
-        aircrafts.push(...imported);
+        aircrafts.push(...allImported);
         renderAircrafts();
 
-        setApiStatus(`Updated ${imported.length} PIA arrivals for ${airportCode} in the next 8 hours.`);
+        setApiStatus(`Updated ${allImported.length} PIA ${scheduleType} flights for ${airportCode} in the next 8 hours.`);
     }
     catch(error){
         setApiStatus(`Could not refresh: ${error.message}. If the browser blocks the API, this will need a small proxy/backend.`);
@@ -591,6 +610,7 @@ async function refreshPIASchedule(){
 function loadSavedApiSettings(){
     document.getElementById('aviationKey').value = localStorage.getItem('aviationstackKey') || document.getElementById('aviationKey').value || '';
     document.getElementById('airportCode').value = localStorage.getItem('piaAirportCode') || 'KHI';
+    document.getElementById('scheduleType').value = localStorage.getItem('piaScheduleType') || 'arrival';
     document.getElementById('apiAttendant').value = localStorage.getItem('piaApiAttendant') || 'Ramp Team';
 }
 
