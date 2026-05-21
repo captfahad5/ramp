@@ -596,7 +596,9 @@ async function refreshPIASchedule(){
             allImported.push(...imported);
         }
 
-        aircrafts = aircrafts.filter(item => item.source !== 'aviationstack');
+        aircrafts = aircrafts.filter(item => {
+            return item.source !== 'aviationstack' || !fetchTypes.includes(item.scheduleType);
+        });
         aircrafts.push(...allImported);
         renderAircrafts();
 
