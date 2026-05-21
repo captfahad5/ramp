@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ramp Duty Aircraft Scheduler</title>
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:Arial, sans-serif;
+}
+
+body{
+    background:#0f172a;
+    color:white;
+    padding:20px;
+}
+
+h1{
+    text-align:center;
+    margin-bottom:20px;
+    font-size:32px;
+}
+
+.topbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:20px;
+    flex-wrap:wrap;
+    gap:10px;
+}
+
+.clock,.api-status{
+    font-size:24px;
+    background:#111827;
+    padding:12px 18px;
+    border-radius:14px;
+    border:1px solid #334155;
+}
+
+.brand-line{
+    text-align:center;
+    margin-bottom:20px;
+    font-size:18px;
+    font-weight:bold;
+}
+
+.brand-blue{
+    color:#60a5fa;
+}
+
+.brand-red{
+    color:#f87171;
+}
+
+.top-right{
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+    gap:12px;
+    flex-wrap:wrap;
+}
+
+.shift-incharge{
+    background:#111827;
+    border:1px solid #334155;
+    border-radius:14px;
+    padding:10px;
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+    min-width:min(360px,100%);
+}
+
+.shift-title{
+    grid-column:1 / -1;
+    color:#facc15;
+    font-size:14px;
+    font-weight:bold;
+}
+
+.shift-incharge input{
+    padding:9px;
+    font-size:14px;
+}
+
+.api-status{
+    display:none;
+    margin-top:12px;
+    font-size:14px;
+    color:#cbd5e1;
+}
+
+.form-box{
+    background:#111827;
+    padding:20px;
+    border-radius:18px;
+    margin-bottom:25px;
+    border:1px solid #334155;
+}
+
+.form-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+    gap:15px;
+}
+
+input, button{
+    padding:12px;
+    border:none;
+    border-radius:12px;
+    font-size:16px;
+}
+
+input{
+    background:#1e293b;
+    color:white;
+}
+
+button{
+    background:#2563eb;
+    color:white;
+    cursor:pointer;
+    transition:0.2s;
+    font-weight:bold;
+}
+
+button:hover{
+    transform:scale(1.03);
+}
+
+.aircraft-list{
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+}
+
+.card{
+    padding:18px;
+    border-radius:18px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:15px;
+    transition:0.3s;
+    border:2px solid transparent;
+}
+
+.card.green{
+    background:#14532d;
+    border-color:#22c55e;
+}
+
+.card.yellow{
+    background:#713f12;
+    border-color:#facc15;
+}
+
+.card.red{
+    background:#7f1d1d;
+    border-color:#ef4444;
+    animation:pulse 1s infinite;
+}
+
+.card.gray{
+    background:#1e293b;
+    border-color:#475569;
+}
+
+@keyframes pulse{
+    0%{transform:scale(1)}
+    50%{transform:scale(1.02)}
+    100%{transform:scale(1)}
+}
+
+.aircraft-info{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+}
+
+.aircraft-code{
+    font-size:28px;
+    font-weight:bold;
+}
+
+.attendant{
+    color:#cbd5e1;
+}
+
+.timer{
+    font-size:30px;
+    font-weight:bold;
+}
+
+.status{
+    font-size:14px;
+    font-weight:bold;
+    padding:8px 12px;
+    border-radius:10px;
+    background:rgba(255,255,255,0.15);
+}
+
+.controls{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+}
+
+.small-btn{
+    background:#334155;
+}
+
+.delete-btn{
+    background:#dc2626;
+}
+
+.refresh-btn{
+    background:#16a34a;
+}
+
+.login-screen{
+    position:fixed;
+    inset:0;
+    z-index:10000;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:#0f172a;
+    padding:20px;
+}
+
+.login-box{
+    width:min(420px,100%);
+    background:#111827;
+    border:1px solid #334155;
+    border-radius:18px;
+    padding:24px;
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+}
+
+.login-title{
+    font-size:24px;
+    font-weight:bold;
+}
+
+.login-error{
+    display:none;
+    color:#fca5a5;
+    font-size:14px;
+}
+
+.app-shell{
+    display:none;
+}
+
+@media(max-width:768px){
+    .card{
+        flex-direction:column;
+        align-items:flex-start;
+    }
+
+    .timer{
+        font-size:24px;
+    }
+}
+</style>
+</head>
+<body>
+
+<div class="login-screen" id="loginScreen">
+    <div class="login-box">
+        <div class="login-title">Ramp Scheduler Login</div>
+        <input type="password" id="appPassword" placeholder="Password">
+        <button onclick="checkPassword()">Open Scheduler</button>
+        <div class="login-error" id="loginError">Wrong password</div>
+    </div>
+</div>
+
+<div class="app-shell" id="appShell">
+
+<h1>✈ Ramp Duty Aircraft Scheduler</h1>
+
+<div class="brand-line">
+    <span class="brand-blue">Made By Capt Fahad ✈</span>
+    <span class="brand-red"> | Powered By AI 💻</span>
+</div>
+
+<div class="topbar">
+    <div style="display:flex;gap:15px;align-items:center;flex-wrap:wrap;">
+        <button onclick="stopContinuousAlarm()" style="background:#dc2626;">
+            Stop Alarm
+        </button>
+
+        <div style="display:flex;gap:15px;align-items:center;background:#111827;padding:10px 15px;border-radius:14px;border:1px solid #334155;flex-wrap:wrap;">
+            <strong>Alarm Mode:</strong>
+
+            <label style="display:flex;align-items:center;gap:6px;">
+                <input type="radio" name="alarmMode" value="silent">
+                Silent
+            </label>
+
+            <label style="display:flex;align-items:center;gap:6px;">
+                <input type="radio" name="alarmMode" value="normal" checked>
+                Voice + 5 Sec
+            </label>
+
+            <label style="display:flex;align-items:center;gap:6px;">
+                <input type="radio" name="alarmMode" value="chime">
+                10 Sec Chime
+            </label>
+        </div>
+    </div>
+
+    <div class="top-right">
+        <div class="shift-incharge">
+            <div class="shift-title">Shift Incharge</div>
+            <input type="text" id="shiftInchargeOne" placeholder="Incharge 1" oninput="saveShiftIncharge()">
+            <input type="text" id="shiftInchargeTwo" placeholder="Incharge 2" oninput="saveShiftIncharge()">
+        </div>
+        <div class="clock" id="liveClock">--:--:--</div>
+    </div>
+</div>
+
+<div class="form-box">
+    <div class="form-grid">
+        <input type="text" id="aircraft" placeholder="Aircraft (Example: AP-BLC)">
+        <input type="text" id="attendant" placeholder="Ramp Attendant Name">
+        <input type="time" id="arrivalTime">
+        <button onclick="addAircraft()">Add Aircraft</button>
+    </div>
+</div>
+
+<div class="form-box">
+    <div class="form-grid">
+        <input type="password" id="aviationKey" value="0b8a02b9ab1447fdcd833afc576ead72" placeholder="Aviationstack API Key">
+        <input type="text" id="airportCode" value="KHI" placeholder="Arrival Airport IATA (KHI / LHE / ISB)">
+        <input type="text" id="apiAttendant" value="Ramp Team" placeholder="Default Ramp Attendant">
+        <button class="refresh-btn" onclick="refreshPIASchedule()">Refresh PIA Schedule</button>
+    </div>
+    <div class="api-status" id="apiStatus"></div>
+</div>
+
+<div class="aircraft-list" id="aircraftList"></div>
+
+</div>
+
+<script>
+const APP_PASSWORD = 'capt123';
+let aircrafts = [];
+let activeContinuousAlarm = false;
+let alarmAudioContext = null;
+let alarmInterval = null;
+let alarmStopTimer = null;
+let alertSequenceId = 0;
+
+function checkPassword(){
+    const passwordInput = document.getElementById('appPassword');
+    const loginError = document.getElementById('loginError');
+
+    if(passwordInput.value === APP_PASSWORD){
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('appShell').style.display = 'block';
+        sessionStorage.setItem('rampSchedulerUnlocked','yes');
+        return;
+    }
+
+    loginError.style.display = 'block';
+    passwordInput.value = '';
+    passwordInput.focus();
+}
+
+function setupLogin(){
+    const passwordInput = document.getElementById('appPassword');
+
+    if(sessionStorage.getItem('rampSchedulerUnlocked') === 'yes'){
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('appShell').style.display = 'block';
+    }
+
+    passwordInput.addEventListener('keydown', (event)=>{
+        if(event.key === 'Enter'){
+            checkPassword();
+        }
+    });
+
+    passwordInput.focus();
+}
+
+function saveShiftIncharge(){
+    localStorage.setItem('shiftInchargeOne', document.getElementById('shiftInchargeOne').value);
+    localStorage.setItem('shiftInchargeTwo', document.getElementById('shiftInchargeTwo').value);
+}
+
+function loadShiftIncharge(){
+    document.getElementById('shiftInchargeOne').value = localStorage.getItem('shiftInchargeOne') || '';
+    document.getElementById('shiftInchargeTwo').value = localStorage.getItem('shiftInchargeTwo') || '';
+}
+
+function updateClock(){
+    const now = new Date();
+    const clock = document.getElementById('liveClock');
+
+    if(clock){
+        clock.innerText = now.toLocaleTimeString();
+    }
+}
+
+setInterval(updateClock,1000);
+updateClock();
+
+function addAircraft(){
+    const aircraft = document.getElementById('aircraft').value.trim();
+    const attendant = document.getElementById('attendant').value.trim();
+    const arrivalTime = document.getElementById('arrivalTime').value;
+
+    if(!aircraft || !attendant || !arrivalTime){
+        alert('Please fill all fields');
+        return;
+    }
+
+    aircrafts.push({
+        id: Date.now(),
+        aircraft: aircraft,
+        attendant: attendant,
+        arrivalTime: arrivalTime,
+        alarmPlayed: false,
+        arrivalAnnounced: false,
+        source: 'manual'
+    });
+
+    document.getElementById('aircraft').value='';
+    document.getElementById('attendant').value='';
+    document.getElementById('arrivalTime').value='';
+
+    renderAircrafts();
+}
+
+function getRemainingSeconds(timeString){
+    const now = new Date();
+    const parts = timeString.split(':');
+    const target = new Date();
+
+    target.setHours(parseInt(parts[0]));
+    target.setMinutes(parseInt(parts[1]));
+    target.setSeconds(0);
+
+    return Math.floor((target.getTime() - now.getTime()) / 1000);
+}
+
+function getTimeFromApiValue(value){
+    if(!value){
+        return '';
+    }
+
+    if(value.includes('T')){
+        const date = new Date(value);
+
+        if(!Number.isNaN(date.getTime())){
+            return `${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
+        }
+
+        return value.split('T')[1].slice(0,5);
+    }
+
+    return value.slice(0,5);
+}
+
+function formatTime(seconds){
+    const negative = seconds < 0;
+
+    seconds = Math.abs(seconds);
+
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+
+    return `${negative ? '-' : ''}${String(hrs).padStart(2,'0')}:${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+}
+
+function escapeHtml(value){
+    return String(value).replace(/[&<>"']/g, (char)=>{
+        return {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        }[char];
+    });
+}
+
+function formatSpokenText(value){
+    return String(value).replace(/\s*[/&]\s*/g,' and ');
+}
+
+function setApiStatus(message){
+    const status = document.getElementById('apiStatus');
+    status.style.display = 'block';
+    status.innerText = message;
+}
+
+async function refreshPIASchedule(){
+    const keyInput = document.getElementById('aviationKey');
+    const airportInput = document.getElementById('airportCode');
+    const attendantInput = document.getElementById('apiAttendant');
+    const key = keyInput.value.trim();
+    const airportCode = airportInput.value.trim().toUpperCase();
+    const attendant = attendantInput.value.trim() || 'Ramp Team';
+
+    if(!key || !airportCode){
+        alert('Please enter Aviationstack API key and airport code');
+        return;
+    }
+
+    localStorage.setItem('aviationstackKey', key);
+    localStorage.setItem('piaAirportCode', airportCode);
+    localStorage.setItem('piaApiAttendant', attendant);
+    setApiStatus('Refreshing PIA arrivals...');
+
+    const today = new Date().toISOString().slice(0,10);
+    const url = `https://api.aviationstack.com/v1/timetable?access_key=${encodeURIComponent(key)}&iataCode=${encodeURIComponent(airportCode)}&type=arrival&airline_iata=PK&date=${today}`;
+
+    try{
+        const response = await fetch(url);
+
+        if(!response.ok){
+            throw new Error(`API request failed (${response.status})`);
+        }
+
+        const data = await response.json();
+
+        if(data.error){
+            throw new Error(data.error.message || data.error.info || 'Aviationstack API error');
+        }
+
+        const results = Array.isArray(data.results) ? data.results : data.data;
+
+        if(!Array.isArray(results)){
+            throw new Error('Unexpected API response');
+        }
+
+        const now = new Date();
+        const imported = results.map((flight, index)=>{
+            const arrival = flight.arrival || {};
+            const aircraft = flight.aircraft || {};
+            const flightInfo = flight.flight || {};
+            const arrivalValue = arrival.estimatedTime || arrival.estimated || arrival.scheduledTime || arrival.scheduled || arrival.actualTime || arrival.actual;
+            const arrivalTime = getTimeFromApiValue(arrivalValue);
+            const aircraftCode = aircraft.registration || aircraft.regNumber || flightInfo.iataNumber || flightInfo.iata || flightInfo.icaoNumber || flightInfo.icao || `PIA-${index + 1}`;
+
+            if(!arrivalTime){
+                return null;
+            }
+
+            const remaining = getRemainingSeconds(arrivalTime);
+
+            if(remaining < 0 || remaining > 28800){
+                return null;
+            }
+
+            return {
+                id: Date.now() + index,
+                aircraft: aircraftCode,
+                attendant: attendant,
+                arrivalTime: arrivalTime,
+                alarmPlayed: remaining <= 1500,
+                arrivalAnnounced: false,
+                source: 'aviationstack'
+            };
+        }).filter(Boolean);
+
+        aircrafts = aircrafts.filter(item => item.source !== 'aviationstack');
+        aircrafts.push(...imported);
+        renderAircrafts();
+
+        setApiStatus(`Updated ${imported.length} PIA arrivals for ${airportCode} in the next 8 hours.`);
+    }
+    catch(error){
+        setApiStatus(`Could not refresh: ${error.message}. If the browser blocks the API, this will need a small proxy/backend.`);
+    }
+}
+
+function loadSavedApiSettings(){
+    document.getElementById('aviationKey').value = localStorage.getItem('aviationstackKey') || document.getElementById('aviationKey').value || '';
+    document.getElementById('airportCode').value = localStorage.getItem('piaAirportCode') || 'KHI';
+    document.getElementById('apiAttendant').value = localStorage.getItem('piaApiAttendant') || 'Ramp Team';
+}
+
+function getPreferredVoice(){
+    if(!('speechSynthesis' in window)){
+        return null;
+    }
+
+    const voices = window.speechSynthesis.getVoices();
+    return voices.find(voice => {
+        return /female|zira|susan|samantha|victoria|hazel/i.test(voice.name);
+    }) || voices.find(voice => voice.lang && voice.lang.toLowerCase().startsWith('en')) || null;
+}
+
+function speakMessage(text, onEnd){
+    if(!('speechSynthesis' in window)){
+        onEnd();
+        return;
+    }
+
+    const message = new SpeechSynthesisUtterance(text);
+    const preferredVoice = getPreferredVoice();
+
+    if(preferredVoice){
+        message.voice = preferredVoice;
+    }
+
+    message.rate = 0.9;
+    message.pitch = 1.15;
+    message.volume = 1;
+    message.onend = onEnd;
+    message.onerror = onEnd;
+
+    window.speechSynthesis.speak(message);
+}
+
+function triggerWarningAlarm(item){
+    const selectedMode = document.querySelector('input[name="alarmMode"]:checked').value;
+
+    if(selectedMode === 'silent'){
+        return;
+    }
+
+    if(selectedMode === 'chime'){
+        startTimedAlarmBeep(10000);
+        return;
+    }
+
+    const sequenceId = ++alertSequenceId;
+    const aircraftCode = formatSpokenText(item.aircraft);
+    const attendantNames = formatSpokenText(item.attendant);
+    const warningText = `Aircraft ${aircraftCode}, 25 minutes to arrival. ${attendantNames}, prepare for arrival in 25 minutes.`;
+
+    if('speechSynthesis' in window){
+        window.speechSynthesis.cancel();
+    }
+
+    speakMessage(warningText, ()=>{
+        if(sequenceId !== alertSequenceId) return;
+
+        speakMessage(warningText, ()=>{
+            if(sequenceId !== alertSequenceId) return;
+
+            startTimedAlarmBeep(5000);
+        });
+    });
+}
+
+function playAlarmTone(){
+    alarmAudioContext = alarmAudioContext || new (window.AudioContext || window.webkitAudioContext)();
+
+    const oscillator = alarmAudioContext.createOscillator();
+    const gain = alarmAudioContext.createGain();
+
+    oscillator.type = 'square';
+    oscillator.frequency.value = 880;
+    gain.gain.setValueAtTime(0.001, alarmAudioContext.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.2, alarmAudioContext.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, alarmAudioContext.currentTime + 0.35);
+
+    oscillator.connect(gain);
+    gain.connect(alarmAudioContext.destination);
+
+    oscillator.start();
+    oscillator.stop(alarmAudioContext.currentTime + 0.4);
+}
+
+function startAlarmBeep(){
+    if(alarmInterval){
+        return;
+    }
+
+    playAlarmTone();
+    alarmInterval = setInterval(playAlarmTone,900);
+}
+
+function stopAlarmBeepOnly(){
+    if(alarmInterval){
+        clearInterval(alarmInterval);
+        alarmInterval = null;
+    }
+
+    if(alarmStopTimer){
+        clearTimeout(alarmStopTimer);
+        alarmStopTimer = null;
+    }
+}
+
+function startTimedAlarmBeep(duration){
+    startAlarmBeep();
+
+    if(alarmStopTimer){
+        clearTimeout(alarmStopTimer);
+    }
+
+    alarmStopTimer = setTimeout(()=>{
+        stopContinuousAlarm();
+    },duration);
+}
+
+function announceArrival(aircraftCode){
+    const selectedMode = document.querySelector('input[name="alarmMode"]:checked').value;
+
+    if(selectedMode === 'silent'){
+        return;
+    }
+
+    if(selectedMode === 'chime'){
+        startTimedAlarmBeep(10000);
+        return;
+    }
+
+    if(!('speechSynthesis' in window)){
+        startTimedAlarmBeep(5000);
+        return;
+    }
+
+    const sequenceId = ++alertSequenceId;
+    const arrivalText = `Aircraft ${aircraftCode} has arrived.`;
+
+    window.speechSynthesis.cancel();
+    startAlarmBeep();
+
+    alarmStopTimer = setTimeout(()=>{
+        stopAlarmBeepOnly();
+
+        if(sequenceId !== alertSequenceId) return;
+
+        speakMessage(arrivalText, ()=>{
+            if(sequenceId !== alertSequenceId) return;
+
+            speakMessage(arrivalText, ()=>{});
+        });
+    },2000);
+}
+
+function stopContinuousAlarm(){
+    alertSequenceId++;
+    activeContinuousAlarm = false;
+
+    if(alarmInterval){
+        clearInterval(alarmInterval);
+        alarmInterval = null;
+    }
+
+    if(alarmStopTimer){
+        clearTimeout(alarmStopTimer);
+        alarmStopTimer = null;
+    }
+
+    if('speechSynthesis' in window){
+        window.speechSynthesis.cancel();
+    }
+}
+
+function deleteAircraft(id){
+    aircrafts = aircrafts.filter(item => item.id !== id);
+
+    renderAircrafts();
+}
+
+function changeTime(id){
+    const aircraft = aircrafts.find(item => item.id === id);
+
+    if(!aircraft) return;
+
+    const existingEditor = document.getElementById('editOverlay');
+
+    if(existingEditor){
+        existingEditor.remove();
+    }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'editOverlay';
+    overlay.style.position = 'fixed';
+    overlay.style.inset = '0';
+    overlay.style.zIndex = '9999';
+    overlay.style.background = 'rgba(15,23,42,0.72)';
+    overlay.style.display = 'flex';
+    overlay.style.alignItems = 'center';
+    overlay.style.justifyContent = 'center';
+    overlay.style.padding = '20px';
+
+    const panel = document.createElement('div');
+    panel.style.width = 'min(420px,100%)';
+    panel.style.background = '#111827';
+    panel.style.border = '1px solid #334155';
+    panel.style.borderRadius = '18px';
+    panel.style.padding = '20px';
+    panel.style.display = 'flex';
+    panel.style.flexDirection = 'column';
+    panel.style.gap = '14px';
+
+    const title = document.createElement('div');
+    title.innerText = `Edit ${aircraft.aircraft}`;
+    title.style.fontSize = '22px';
+    title.style.fontWeight = 'bold';
+
+    const attendantInput = document.createElement('input');
+    attendantInput.type = 'text';
+    attendantInput.value = aircraft.attendant;
+    attendantInput.placeholder = 'Ramp Attendant Name';
+
+    const timeInput = document.createElement('input');
+    timeInput.type = 'time';
+    timeInput.value = aircraft.arrivalTime;
+
+    const buttons = document.createElement('div');
+    buttons.style.display = 'flex';
+    buttons.style.gap = '10px';
+    buttons.style.flexWrap = 'wrap';
+
+    const saveButton = document.createElement('button');
+    saveButton.innerText = 'Save';
+
+    const cancelButton = document.createElement('button');
+    cancelButton.innerText = 'Cancel';
+    cancelButton.className = 'small-btn';
+
+    saveButton.addEventListener('click', ()=>{
+        const attendant = attendantInput.value.trim();
+
+        if(!attendant || !timeInput.value){
+            alert('Please enter attendant and time');
+            return;
+        }
+
+        aircraft.attendant = attendant;
+        aircraft.arrivalTime = timeInput.value;
+        aircraft.alarmPlayed = false;
+        aircraft.arrivalAnnounced = false;
+
+        overlay.remove();
+        renderAircrafts();
+    });
+
+    cancelButton.addEventListener('click', ()=>{
+        overlay.remove();
+    });
+
+    overlay.addEventListener('click', (event)=>{
+        if(event.target === overlay){
+            overlay.remove();
+        }
+    });
+
+    buttons.appendChild(saveButton);
+    buttons.appendChild(cancelButton);
+    panel.appendChild(title);
+    panel.appendChild(attendantInput);
+    panel.appendChild(timeInput);
+    panel.appendChild(buttons);
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+
+    attendantInput.focus();
+}
+
+function renderAircrafts(){
+    aircrafts = aircrafts.filter(item => getRemainingSeconds(item.arrivalTime) > -1800);
+
+    aircrafts.sort((a,b)=>{
+        return getRemainingSeconds(a.arrivalTime) - getRemainingSeconds(b.arrivalTime);
+    });
+
+    const container = document.getElementById('aircraftList');
+
+    container.innerHTML='';
+
+    aircrafts.forEach(item=>{
+        const remaining = getRemainingSeconds(item.arrivalTime);
+
+        let colorClass = 'gray';
+        let status = 'Scheduled';
+
+        if(remaining <= 3600 && remaining > 1500){
+            colorClass = 'yellow';
+            status = 'Prepare Crew';
+        }
+
+        if(remaining <= 1500 && remaining > 0){
+            colorClass = 'red';
+            status = 'CREW ALERT - AIRCRAFT INCOMING';
+
+            if(!item.alarmPlayed){
+                item.alarmPlayed = true;
+                triggerWarningAlarm(item);
+            }
+        }
+
+        if(remaining <= 0){
+            colorClass = 'green';
+            status = 'ARRIVED';
+
+            if(!item.arrivalAnnounced){
+                item.arrivalAnnounced = true;
+                announceArrival(item.aircraft);
+            }
+        }
+
+        const card = document.createElement('div');
+
+        card.className = `card ${colorClass}`;
+
+        card.innerHTML = `
+            <div class="aircraft-info">
+                <div class="aircraft-code">${escapeHtml(item.aircraft)}</div>
+                <div class="attendant">Attendant: ${escapeHtml(item.attendant)}</div>
+                <div>ETA: ${item.arrivalTime}</div>
+            </div>
+
+            <div class="timer">${formatTime(remaining)}</div>
+
+            <div class="status">${status}</div>
+
+            <div class="controls">
+                <button class="small-btn" onclick="changeTime(${item.id})">Delay / Edit</button>
+                <button class="delete-btn" onclick="deleteAircraft(${item.id})">Delete</button>
+            </div>
+        `;
+
+        container.appendChild(card);
+    });
+}
+
+setupLogin();
+loadShiftIncharge();
+loadSavedApiSettings();
+setInterval(renderAircrafts,1000);
+</script>
+
+</body>
+</html>
+
