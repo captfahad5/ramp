@@ -512,6 +512,10 @@ function setApiStatus(message){
     status.innerText = message;
 }
 
+function wait(ms){
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 async function refreshPIASchedule(){
     const keyInput = document.getElementById('aviationKey');
     const airportInput = document.getElementById('airportCode');
@@ -539,7 +543,10 @@ async function refreshPIASchedule(){
     try{
         const allImported = [];
 
-        for(const type of fetchTypes){
+        for(let typeIndex = 0; typeIndex < fetchTypes.length; typeIndex++){
+            const type = fetchTypes[typeIndex];
+            setApiStatus(`Refreshing PIA ${type} flights for ${airportCode}...`);
+
             const url = `https://api.aviationstack.com/v1/timetable?access_key=${encodeURIComponent(key)}&iataCode=${encodeURIComponent(airportCode)}&type=${type}&airline_iata=PK&date=${today}`;
             const response = await fetch(url);
 
@@ -594,13 +601,18 @@ async function refreshPIASchedule(){
             }).filter(Boolean);
 
             allImported.push(...imported);
-        }
 
-        aircrafts = aircrafts.filter(item => {
-            return item.source !== 'aviationstack' || !fetchTypes.includes(item.scheduleType);
-        });
-        aircrafts.push(...allImported);
-        renderAircrafts();
+            aircrafts = aircrafts.filter(item => {
+                return item.source !== 'aviationstack' || item.scheduleType !== type;
+            });
+            aircrafts.push(...imported);
+            renderAircrafts();
+
+            if(scheduleType === 'both' && typeIndex === 0){
+                setApiStatus(`Arrival updated. Waiting 60 seconds before fetching departure to avoid API time limit...`);
+                await wait(60000);
+            }
+        }
 
         setApiStatus(`Updated ${allImported.length} PIA ${scheduleType} flights for ${airportCode} in the next 8 hours.`);
     }
