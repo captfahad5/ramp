@@ -409,6 +409,23 @@ function loadShiftIncharge(){
     document.getElementById('shiftInchargeTwo').value = localStorage.getItem('shiftInchargeTwo') || '';
 }
 
+function saveAircrafts(){
+    localStorage.setItem('rampAircrafts', JSON.stringify(aircrafts));
+}
+
+function loadAircrafts(){
+    try{
+        const savedAircrafts = JSON.parse(localStorage.getItem('rampAircrafts') || '[]');
+
+        if(Array.isArray(savedAircrafts)){
+            aircrafts = savedAircrafts;
+        }
+    }
+    catch(error){
+        aircrafts = [];
+    }
+}
+
 function updateClock(){
     const now = new Date();
     const clock = document.getElementById('liveClock');
@@ -445,6 +462,7 @@ function addAircraft(){
     document.getElementById('attendant').value='';
     document.getElementById('arrivalTime').value='';
 
+    saveAircrafts();
     renderAircrafts();
 }
 
@@ -606,6 +624,7 @@ async function refreshPIASchedule(){
                 return item.source !== 'aviationstack' || item.scheduleType !== type;
             });
             aircrafts.push(...imported);
+            saveAircrafts();
             renderAircrafts();
 
             if(scheduleType === 'both' && typeIndex === 0){
@@ -803,6 +822,7 @@ function stopContinuousAlarm(){
 function deleteAircraft(id){
     aircrafts = aircrafts.filter(item => item.id !== id);
 
+    saveAircrafts();
     renderAircrafts();
 }
 
@@ -878,6 +898,7 @@ function changeTime(id){
         aircraft.arrivalAnnounced = false;
 
         overlay.remove();
+        saveAircrafts();
         renderAircrafts();
     });
 
@@ -904,7 +925,12 @@ function changeTime(id){
 }
 
 function renderAircrafts(){
+    const countBeforeCleanup = aircrafts.length;
     aircrafts = aircrafts.filter(item => getRemainingSeconds(item.arrivalTime) > -1800);
+
+    if(aircrafts.length !== countBeforeCleanup){
+        saveAircrafts();
+    }
 
     aircrafts.sort((a,b)=>{
         return getRemainingSeconds(a.arrivalTime) - getRemainingSeconds(b.arrivalTime);
@@ -931,6 +957,7 @@ function renderAircrafts(){
 
             if(!item.alarmPlayed){
                 item.alarmPlayed = true;
+                saveAircrafts();
                 triggerWarningAlarm(item);
             }
         }
@@ -941,6 +968,7 @@ function renderAircrafts(){
 
             if(!item.arrivalAnnounced){
                 item.arrivalAnnounced = true;
+                saveAircrafts();
                 announceArrival(item.aircraft);
             }
         }
@@ -973,6 +1001,8 @@ function renderAircrafts(){
 setupLogin();
 loadShiftIncharge();
 loadSavedApiSettings();
+loadAircrafts();
+renderAircrafts();
 setInterval(renderAircrafts,1000);
 </script>
 
