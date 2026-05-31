@@ -184,6 +184,42 @@ button:hover{
     gap:6px;
 }
 
+.aircraft-heading{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+}
+
+.movement-badge{
+    min-width:98px;
+    padding:7px 9px;
+    border-radius:10px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    font-size:13px;
+    font-weight:bold;
+    background:rgba(255,255,255,0.15);
+}
+
+.movement-badge.arrival{
+    color:#fecaca;
+    border:1px solid #ef4444;
+    background:rgba(127,29,29,0.72);
+}
+
+.movement-badge.departure{
+    color:#bbf7d0;
+    border:1px solid #22c55e;
+    background:rgba(20,83,45,0.72);
+}
+
+.route-info{
+    color:#e2e8f0;
+    font-size:15px;
+}
+
 .aircraft-code{
     font-size:28px;
     font-weight:bold;
@@ -353,6 +389,16 @@ button:hover{
     <div class="api-status" id="apiStatus"></div>
 </div>
 
+<div class="form-box">
+    <div class="form-grid">
+        <select id="displayFilter" onchange="saveDisplayFilter(); renderAircrafts();">
+            <option value="both">Show Both</option>
+            <option value="arrival">Show Arrival Only</option>
+            <option value="departure">Show Departure Only</option>
+        </select>
+    </div>
+</div>
+
 <div class="aircraft-list" id="aircraftList"></div>
 
 </div>
@@ -409,6 +455,14 @@ function loadShiftIncharge(){
     document.getElementById('shiftInchargeTwo').value = localStorage.getItem('shiftInchargeTwo') || '';
 }
 
+function saveDisplayFilter(){
+    localStorage.setItem('displayFilter', document.getElementById('displayFilter').value);
+}
+
+function loadDisplayFilter(){
+    document.getElementById('displayFilter').value = localStorage.getItem('displayFilter') || 'both';
+}
+
 function saveAircrafts(){
     localStorage.setItem('rampAircrafts', JSON.stringify(aircrafts));
 }
@@ -418,7 +472,16 @@ function loadAircrafts(){
         const savedAircrafts = JSON.parse(localStorage.getItem('rampAircrafts') || '[]');
 
         if(Array.isArray(savedAircrafts)){
-            aircrafts = savedAircrafts;
+            aircrafts = savedAircrafts.map(item => {
+                if(item.scheduleType === 'departure'){
+                    return {
+                        ...item,
+                        aircraft: String(item.aircraft).replace(/^DEP\s+/i,'')
+                    };
+                }
+
+                return item;
+            });
         }
     }
     catch(error){
@@ -496,6 +559,97 @@ function getTimeFromApiValue(value){
     return value.slice(0,5);
 }
 
+const AIRPORT_CITY_NAMES = {
+    AAN: 'Al Ain',
+    ADD: 'Addis Ababa',
+    AUH: 'Abu Dhabi',
+    BAH: 'Bahrain',
+    BCN: 'Barcelona',
+    BEG: 'Belgrade',
+    BHV: 'Bahawalpur',
+    BKK: 'Bangkok',
+    BSL: 'Basel',
+    CAN: 'Guangzhou',
+    CDG: 'Paris',
+    CPH: 'Copenhagen',
+    CJJ: 'Chitral',
+    DAC: 'Dhaka',
+    DMM: 'Dammam',
+    DOH: 'Doha',
+    DXB: 'Dubai',
+    FCO: 'Rome',
+    FRA: 'Frankfurt',
+    GIL: 'Gilgit',
+    GLA: 'Glasgow',
+    GRW: 'Gwadar',
+    HKG: 'Hong Kong',
+    ISB: 'Islamabad',
+    IST: 'Istanbul',
+    JED: 'Jeddah',
+    JFK: 'New York',
+    KDU: 'Skardu',
+    KHI: 'Karachi',
+    KWI: 'Kuwait',
+    KUL: 'Kuala Lumpur',
+    LHE: 'Lahore',
+    LHR: 'London',
+    LYP: 'Faisalabad',
+    MAN: 'Manchester',
+    MED: 'Medina',
+    MHD: 'Mashhad',
+    MCT: 'Muscat',
+    MOW: 'Moscow',
+    MUX: 'Multan',
+    NRT: 'Tokyo',
+    ORD: 'Chicago',
+    ORW: 'Ormara',
+    OSL: 'Oslo',
+    PEW: 'Peshawar',
+    PZH: 'Zhob',
+    RYK: 'Rahim Yar Khan',
+    RUH: 'Riyadh',
+    SAI: 'Siem Reap',
+    SAW: 'Istanbul',
+    SHJ: 'Sharjah',
+    SKZ: 'Sukkur',
+    SKT: 'Sialkot',
+    SLL: 'Salalah',
+    SYD: 'Sydney',
+    TUK: 'Turbat',
+    YYZ: 'Toronto',
+    UET: 'Quetta'
+};
+
+function getAirportName(airport){
+    const name = airport.airport || airport.airportName || airport.name || '';
+    const code = String(airport.iata || airport.iataCode || airport.icao || airport.icaoCode || '').toUpperCase();
+
+    if(code && AIRPORT_CITY_NAMES[code]){
+        return AIRPORT_CITY_NAMES[code];
+    }
+
+    if(name){
+        return name
+            .replace(/\s*(International|Intl\.?|Airport|Air Base)\s*/gi,' ')
+            .replace(/\s+/g,' ')
+            .trim();
+    }
+
+    return code || '';
+}
+
+function getRouteInfo(flight, type){
+    const arrival = flight.arrival || {};
+    const departure = flight.departure || {};
+    const route = flight.route || {};
+
+    if(type === 'departure'){
+        return getAirportName(arrival) || getAirportName({ iataCode: route.destination || route.arrival || route.to || '' });
+    }
+
+    return getAirportName(departure) || getAirportName({ iataCode: route.origin || route.departure || route.from || '' });
+}
+
 function formatTime(seconds){
     const negative = seconds < 0;
 
@@ -506,6 +660,16 @@ function formatTime(seconds){
     const secs = seconds % 60;
 
     return `${negative ? '-' : ''}${String(hrs).padStart(2,'0')}:${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+}
+
+function formatScheduleTime(timeString){
+    const parts = timeString.split(':');
+    const hours = parseInt(parts[0]);
+    const minutes = parts[1] || '00';
+    const suffix = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12;
+
+    return `${timeString} (${String(displayHours).padStart(2,'0')}:${minutes} ${suffix})`;
 }
 
 function escapeHtml(value){
@@ -594,7 +758,8 @@ async function refreshPIASchedule(){
                 const scheduleTime = getTimeFromApiValue(timeValue);
                 const flightNumber = flightInfo.iataNumber || flightInfo.iata || flightInfo.icaoNumber || flightInfo.icao || `PIA-${index + 1}`;
                 const aircraftCode = aircraft.registration || aircraft.regNumber || flightNumber;
-                const displayCode = type === 'departure' ? `DEP ${aircraftCode}` : aircraftCode;
+                const displayCode = aircraftCode;
+                const routeInfo = getRouteInfo(flight, type);
 
                 if(!scheduleTime){
                     return null;
@@ -614,6 +779,7 @@ async function refreshPIASchedule(){
                     alarmPlayed: remaining <= 1500,
                     arrivalAnnounced: false,
                     scheduleType: type,
+                    routeInfo: routeInfo,
                     source: 'aviationstack'
                 };
             }).filter(Boolean);
@@ -682,6 +848,7 @@ function speakMessage(text, onEnd){
 
 function triggerWarningAlarm(item){
     const selectedMode = document.querySelector('input[name="alarmMode"]:checked').value;
+    const movement = item.scheduleType === 'departure' ? 'departure' : 'arrival';
 
     if(selectedMode === 'silent'){
         return;
@@ -695,7 +862,7 @@ function triggerWarningAlarm(item){
     const sequenceId = ++alertSequenceId;
     const aircraftCode = formatSpokenText(item.aircraft);
     const attendantNames = formatSpokenText(item.attendant);
-    const warningText = `Aircraft ${aircraftCode}, 25 minutes to arrival. ${attendantNames}, prepare for arrival in 25 minutes.`;
+    const warningText = `Aircraft ${aircraftCode}, 25 minutes to ${movement}. ${attendantNames}, prepare for ${movement} in 25 minutes.`;
 
     if('speechSynthesis' in window){
         window.speechSynthesis.cancel();
@@ -764,8 +931,9 @@ function startTimedAlarmBeep(duration){
     },duration);
 }
 
-function announceArrival(aircraftCode){
+function announceArrival(aircraftCode, scheduleType){
     const selectedMode = document.querySelector('input[name="alarmMode"]:checked').value;
+    const movementDone = scheduleType === 'departure' ? 'departed' : 'arrived';
 
     if(selectedMode === 'silent'){
         return;
@@ -782,7 +950,7 @@ function announceArrival(aircraftCode){
     }
 
     const sequenceId = ++alertSequenceId;
-    const arrivalText = `Aircraft ${aircraftCode} has arrived.`;
+    const arrivalText = `Aircraft ${aircraftCode} has ${movementDone}.`;
 
     window.speechSynthesis.cancel();
     startAlarmBeep();
@@ -937,23 +1105,38 @@ function renderAircrafts(){
     });
 
     const container = document.getElementById('aircraftList');
+    const displayFilter = document.getElementById('displayFilter').value;
 
     container.innerHTML='';
 
     aircrafts.forEach(item=>{
         const remaining = getRemainingSeconds(item.arrivalTime);
+        const isDeparture = item.scheduleType === 'departure';
+        const itemType = isDeparture ? 'departure' : 'arrival';
+
+        if(displayFilter !== 'both' && displayFilter !== itemType){
+            return;
+        }
+
+        const movementLabel = isDeparture ? 'departure' : 'arrival';
+        const completedStatus = isDeparture ? 'DEPARTED' : 'ARRIVED';
+        const urgentStatus = isDeparture ? 'CREW ALERT - AIRCRAFT DEPARTURE' : 'CREW ALERT - AIRCRAFT INCOMING';
+        const timeLabel = isDeparture ? 'ETD' : 'ETA';
+        const movementBadge = isDeparture ? 'DEPARTURE &uarr;' : 'ARRIVAL &darr;';
+        const routeLabel = isDeparture ? 'To' : 'From';
+        const routeLine = item.routeInfo ? `<div class="route-info">${routeLabel}: ${escapeHtml(item.routeInfo)}</div>` : '';
 
         let colorClass = 'gray';
         let status = 'Scheduled';
 
         if(remaining <= 3600 && remaining > 1500){
             colorClass = 'yellow';
-            status = 'Prepare Crew';
+            status = isDeparture ? 'Prepare Departure' : 'Prepare Crew';
         }
 
         if(remaining <= 1500 && remaining > 0){
             colorClass = 'red';
-            status = 'CREW ALERT - AIRCRAFT INCOMING';
+            status = urgentStatus;
 
             if(!item.alarmPlayed){
                 item.alarmPlayed = true;
@@ -964,12 +1147,12 @@ function renderAircrafts(){
 
         if(remaining <= 0){
             colorClass = 'green';
-            status = 'ARRIVED';
+            status = completedStatus;
 
             if(!item.arrivalAnnounced){
                 item.arrivalAnnounced = true;
                 saveAircrafts();
-                announceArrival(item.aircraft);
+                announceArrival(item.aircraft, item.scheduleType);
             }
         }
 
@@ -979,9 +1162,13 @@ function renderAircrafts(){
 
         card.innerHTML = `
             <div class="aircraft-info">
-                <div class="aircraft-code">${escapeHtml(item.aircraft)}</div>
+                <div class="aircraft-heading">
+                    <div class="aircraft-code">${escapeHtml(item.aircraft)}</div>
+                    <span class="movement-badge ${movementLabel}" title="${movementLabel}">${movementBadge}</span>
+                </div>
+                ${routeLine}
                 <div class="attendant">Attendant: ${escapeHtml(item.attendant)}</div>
-                <div>ETA: ${item.arrivalTime}</div>
+                <div>${timeLabel}: ${formatScheduleTime(item.arrivalTime)}</div>
             </div>
 
             <div class="timer">${formatTime(remaining)}</div>
@@ -1001,6 +1188,7 @@ function renderAircrafts(){
 setupLogin();
 loadShiftIncharge();
 loadSavedApiSettings();
+loadDisplayFilter();
 loadAircrafts();
 renderAircrafts();
 setInterval(renderAircrafts,1000);
